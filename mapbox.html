@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Interactive Path and Route Visualizer between two points using Mapbox GL JS, jQuery, and OSRM Directions API.">
+  <title>Mapbox GL JS - Route Path Visualizer (Point A to Point B)</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Mapbox GL JS CSS & JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --card-bg: rgba(15, 23, 42, 0.82);
+      --card-border: rgba(255, 255, 255, 0.12);
+      --card-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+      --accent-cyan: #06b6d4;
+      --accent-blue: #3b82f6;
+      --accent-purple: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Map Viewport */
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Glassmorphism Top Navigation */
+    .top-nav {
+      position: absolute;
+      top: 18px;
+      left: 20px;
+      right: 20px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .brand-pill {
+      pointer-events: auto;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 9999px;
+      padding: 10px 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--card-shadow);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .brand-pill:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      box-shadow: 0 10px 30px -5px rgba(59, 130, 246, 0.3);
+    }
+
+    .badge-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 15px;
+      color: white;
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.5);
+    }
+
+    .brand-text h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .nav-actions {
+      pointer-events: auto;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .nav-btn {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 9px 18px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--card-shadow);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(30, 41, 59, 0.95);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .nav-btn.primary {
+      background: linear-gradient(135deg, #2563eb, #0284c7);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      box-shadow: 0 8px 24px -4px rgba(37, 99, 235, 0.5);
+    }
+
+    .nav-btn.primary:hover {
+      background: linear-gradient(135deg, #1d4ed8, #0369a1);
+      transform: translateY(-1px);
+    }
+
+    /* Floating Side Control Card */
+    .control-sidebar {
+      position: absolute;
+      top: 86px;
+      left: 20px;
+      width: 370px;
+      max-height: calc(100vh - 110px);
+      z-index: 10;
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: var(--card-shadow);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.15) transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .control-sidebar::-webkit-scrollbar {
+      width: 5px;
+    }
+    .control-sidebar::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.15);
+      border-radius: 4px;
+    }
+
+    /* Route Overview Card */
+    .stats-card {
+      background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-box {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      font-family: var(--font-mono);
+    }
+
+    .stat-value.highlight {
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Points Selection Area */
+    .points-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+
+    .point-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .point-card:focus-within {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+    }
+
+    .point-indicator {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .point-a-badge {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+
+    .point-b-badge {
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      color: white;
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+    }
+
+    .point-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .point-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .point-coords {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #fff;
+      background: transparent;
+      border: none;
+      outline: none;
+      width: 100%;
+    }
+
+    /* Action Buttons Row */
+    .controls-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      border: none;
+      outline: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.13);
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(14, 165, 233, 0.35);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .btn-full {
+      width: 100%;
+    }
+
+    /* Preset Route Selector */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .custom-select {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      color: #fff;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: var(--font-sans);
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .custom-select:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    /* Style Switcher */
+    .style-switcher {
+      display: flex;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .style-tab {
+      flex: 1;
+      padding: 7px 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-radius: 7px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      transition: all 0.2s ease;
+    }
+
+    .style-tab.active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    /* Token Config Banner / Modal */
+    .token-bar {
+      background: rgba(234, 179, 8, 0.12);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: #fef08a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .token-bar button {
+      background: rgba(234, 179, 8, 0.25);
+      border: 1px solid rgba(234, 179, 8, 0.5);
+      color: #fff;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* Custom Pulsing Markers */
+    .custom-map-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      cursor: grab;
+      position: relative;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .custom-map-marker:active {
+      cursor: grabbing;
+      transform: scale(1.15);
+    }
+
+    .marker-inner {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 13px;
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 2;
+    }
+
+    .marker-origin .marker-inner {
+      background: #10b981;
+    }
+
+    .marker-destination .marker-inner {
+      background: #f43f5e;
+    }
+
+    .marker-pulse {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      z-index: 1;
+    }
+
+    .marker-origin .marker-pulse {
+      background: rgba(16, 185, 129, 0.4);
+    }
+
+    .marker-destination .marker-pulse {
+      background: rgba(244, 63, 94, 0.4);
+    }
+
+    @keyframes pulse-ring {
+      0% {
+        transform: scale(0.6);
+        opacity: 0.9;
+      }
+      80%, 100% {
+        transform: scale(1.6);
+        opacity: 0;
+      }
+    }
+
+    /* Instructions Floating Pill */
+    .instruction-tooltip {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: var(--card-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--card-border);
+      border-radius: 9999px;
+      padding: 9px 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--card-shadow);
+      pointer-events: none;
+    }
+
+    .instruction-tooltip strong {
+      color: #38bdf8;
+    }
+
+    /* Modal for Token */
+    .token-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-box {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      width: 90%;
+      max-width: 520px;
+      padding: 28px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    }
+
+    .modal-box h3 {
+      font-size: 18px;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .modal-box p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .token-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px;
+      font-family: var(--font-mono);
+      color: #38bdf8;
+      margin-bottom: 20px;
+      outline: none;
+    }
+
+    .token-input:focus {
+      border-color: #38bdf8;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .control-sidebar {
+        width: calc(100% - 32px);
+        left: 16px;
+        right: 16px;
+        top: auto;
+        bottom: 16px;
+        max-height: 48vh;
+      }
+      .instruction-tooltip {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="top-nav">
+    <div class="brand-pill">
+      <div class="badge-icon">M</div>
+      <div class="brand-text">
+        <h1 id="page-title">Mapbox GL JS &bull; Path Navigator</h1>
+        <p>Interactive Point A to Point B Route Routing</p>
+      </div>
+    </div>
+
+    <div class="nav-actions">
+      <a href="index.html" class="nav-btn" id="btn-home">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        Overview
+      </a>
+      <a href="maplibre.html" class="nav-btn primary" id="btn-goto-maplibre">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M16 12l-4-4-4 4M12 16V8"></path></svg>
+        Open MapLibre GL
+      </a>
+    </div>
+  </header>
+
+  <!-- Sidebar Controls -->
+  <aside class="control-sidebar">
+    <!-- Token Notification Banner -->
+    <div class="token-bar" id="token-status-banner">
+      <span id="token-status-text">Mapbox Access Token: active</span>
+      <button id="btn-edit-token">Change Token</button>
+    </div>
+
+    <!-- Live Route Distance & Duration Stats -->
+    <div class="stats-card">
+      <div class="stat-box">
+        <span class="stat-label">Total Distance</span>
+        <span class="stat-value highlight" id="route-distance">-- km</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">Est. Travel Time</span>
+        <span class="stat-value" id="route-duration">-- min</span>
+      </div>
+    </div>
+
+    <!-- Preset Routes -->
+    <div class="form-group">
+      <label class="form-label" for="preset-select">Preset Journey</label>
+      <select id="preset-select" class="custom-select">
+        <option value="nyc_boston">New York to Boston (USA)</option>
+        <option value="paris_amsterdam">Paris to Amsterdam (Europe)</option>
+        <option value="london_cambridge">London to Cambridge (UK)</option>
+        <option value="sf_sanjose" selected>San Francisco to San Jose (Silicon Valley)</option>
+        <option value="tokyo_yokohama">Tokyo to Yokohama (Japan)</option>
+      </select>
+    </div>
+
+    <!-- Origin & Destination Inputs -->
+    <div class="points-section">
+      <div class="point-card">
+        <div class="point-indicator point-a-badge">A</div>
+        <div class="point-info">
+          <div class="point-title">Origin (Point A)</div>
+          <input type="text" id="origin-coords" class="point-coords" readonly value="-122.4194, 37.7749">
+        </div>
+      </div>
+
+      <div class="point-card">
+        <div class="point-indicator point-b-badge">B</div>
+        <div class="point-info">
+          <div class="point-title">Destination (Point B)</div>
+          <input type="text" id="dest-coords" class="point-coords" readonly value="-121.8863, 37.3382">
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Actions -->
+    <div class="controls-row">
+      <button class="btn btn-secondary" id="btn-reverse-route" title="Swap Origin & Destination">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/></svg>
+        Swap Points
+      </button>
+      <button class="btn btn-secondary" id="btn-fit-bounds" title="Fit view to current path">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        Fit Path View
+      </button>
+    </div>
+
+    <!-- Map Style Switcher -->
+    <div class="form-group">
+      <label class="form-label">Map Style</label>
+      <div class="style-switcher">
+        <button class="style-tab active" data-style="mapbox://styles/mapbox/dark-v11">Dark</button>
+        <button class="style-tab" data-style="mapbox://styles/mapbox/streets-v12">Streets</button>
+        <button class="style-tab" data-style="mapbox://styles/mapbox/navigation-night-v1">Night</button>
+        <button class="style-tab" data-style="mapbox://styles/mapbox/satellite-streets-v12">Satellite</button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" id="btn-recalculate">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+      Refresh Path
+    </button>
+  </aside>
+
+  <!-- Instructional floating hint -->
+  <div class="instruction-tooltip">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+    <span>Tip: <strong>Drag markers A and B</strong> on the map to recalculate the path dynamically!</span>
+  </div>
+
+  <!-- Map Container -->
+  <main id="map" aria-label="Mapbox Interactive Path Map"></main>
+
+  <!-- Token Settings Modal -->
+  <div class="token-modal" id="token-modal">
+    <div class="modal-box">
+      <h3>Enter Mapbox Access Token</h3>
+      <p>Mapbox GL JS requires a valid public access token (e.g., <code>pk.eyJ1...</code>). You can get a free token from <a href="https://account.mapbox.com/" target="_blank" style="color:#38bdf8;">mapbox.com</a>.</p>
+      <input type="text" id="input-mapbox-token" class="token-input" placeholder="pk.eyJ1...">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btn-cancel-token">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-token">Save & Reload</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic using jQuery and Mapbox GL JS -->
+  <script>
+    $(document).ready(function() {
+      // Default fallback public token or local stored token
+      const DEFAULT_TOKEN = '';
+      let userToken = localStorage.getItem('mapbox_custom_token') || DEFAULT_TOKEN;
+
+      mapboxgl.accessToken = userToken;
+
+      // Defined Presets [Lng, Lat]
+      const PRESETS = {
+        sf_sanjose: {
+          name: "San Francisco to San Jose",
+          origin: [-122.4194, 37.7749],
+          dest: [-121.8863, 37.3382]
+        },
+        nyc_boston: {
+          name: "New York to Boston",
+          origin: [-74.0060, 40.7128],
+          dest: [-71.0589, 42.3601]
+        },
+        london_cambridge: {
+          name: "London to Cambridge",
+          origin: [-0.1278, 51.5074],
+          dest: [0.1218, 52.2053]
+        },
+        paris_amsterdam: {
+          name: "Paris to Amsterdam",
+          origin: [2.3522, 48.8566],
+          dest: [4.9041, 52.3676]
+        },
+        tokyo_yokohama: {
+          name: "Tokyo to Yokohama",
+          origin: [139.6917, 35.6895],
+          dest: [139.6380, 35.4437]
+        }
+      };
+
+      let currentOrigin = [...PRESETS.sf_sanjose.origin];
+      let currentDest = [...PRESETS.sf_sanjose.dest];
+      let currentStyle = 'mapbox://styles/mapbox/dark-v11';
+      let map, markerA, markerB;
+
+      // Update token status indicator
+      function updateTokenDisplay() {
+        if (localStorage.getItem('mapbox_custom_token')) {
+          $('#token-status-text').text('Custom Token: Active');
+          $('#token-status-banner').css('border-color', 'rgba(16, 185, 129, 0.4)').css('color', '#a7f3d0');
+        } else {
+          $('#token-status-text').text('Default Demo Token: Active');
+        }
+      }
+      updateTokenDisplay();
+
+      // Create Custom DOM Element for Mapbox Marker
+      function createMarkerElement(label, type) {
+        const el = document.createElement('div');
+        el.className = `custom-map-marker marker-${type}`;
+        el.innerHTML = `
+          <div class="marker-pulse"></div>
+          <div class="marker-inner">${label}</div>
+        `;
+        return el;
+      }
+
+      // Initialize the Map
+      function initMap() {
+        try {
+          map = new mapboxgl.Map({
+            container: 'map',
+            style: currentStyle,
+            center: [
+              (currentOrigin[0] + currentDest[0]) / 2,
+              (currentOrigin[1] + currentDest[1]) / 2
+            ],
+            zoom: 9,
+            pitch: 35,
+            attributionControl: false
+          });
+
+          map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
+          map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
+
+          // Initialize Draggable Markers
+          const elA = createMarkerElement('A', 'origin');
+          markerA = new mapboxgl.Marker({ element: elA, draggable: true })
+            .setLngLat(currentOrigin)
+            .addTo(map);
+
+          const elB = createMarkerElement('B', 'destination');
+          markerB = new mapboxgl.Marker({ element: elB, draggable: true })
+            .setLngLat(currentDest)
+            .addTo(map);
+
+          // Drag Events
+          markerA.on('dragend', function() {
+            const lngLat = markerA.getLngLat();
+            currentOrigin = [lngLat.lng, lngLat.lat];
+            updateCoordsDisplay();
+            fetchAndDrawPath();
+          });
+
+          markerB.on('dragend', function() {
+            const lngLat = markerB.getLngLat();
+            currentDest = [lngLat.lng, lngLat.lat];
+            updateCoordsDisplay();
+            fetchAndDrawPath();
+          });
+
+          // Click map to set destination
+          map.on('click', function(e) {
+            // Check shift-click or closest point
+            const clickCoord = [e.lngLat.lng, e.lngLat.lat];
+            const distToA = Math.hypot(clickCoord[0] - currentOrigin[0], clickCoord[1] - currentOrigin[1]);
+            const distToB = Math.hypot(clickCoord[0] - currentDest[0], clickCoord[1] - currentDest[1]);
+
+            if (distToA < distToB) {
+              currentOrigin = clickCoord;
+              markerA.setLngLat(currentOrigin);
+            } else {
+              currentDest = clickCoord;
+              markerB.setLngLat(currentDest);
+            }
+            updateCoordsDisplay();
+            fetchAndDrawPath();
+          });
+
+          map.on('load', function() {
+            setupPathLayers();
+            fetchAndDrawPath();
+            fitMapToBounds();
+          });
+
+        } catch (err) {
+          console.error("Mapbox initialization error:", err);
+          $('#token-modal').css('display', 'flex');
+        }
+      }
+
+      // Add GeoJSON Layer & Sources for Glowing Route Path
+      function setupPathLayers() {
+        if (!map.getSource('route-source')) {
+          map.addSource('route-source', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: []
+              }
+            }
+          });
+
+          // Outer Glow
+          map.addLayer({
+            id: 'route-glow',
+            type: 'line',
+            source: 'route-source',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#38bdf8',
+              'line-width': 10,
+              'line-opacity': 0.35,
+              'line-blur': 4
+            }
+          });
+
+          // Main Crisp Path Line
+          map.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route-source',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#06b6d4',
+              'line-width': 4.5,
+              'line-opacity': 0.95
+            }
+          });
+
+          // Dashed animation line accent
+          map.addLayer({
+            id: 'route-dash',
+            type: 'line',
+            source: 'route-source',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#ffffff',
+              'line-width': 2,
+              'line-dasharray': [1, 2],
+              'line-opacity': 0.8
+            }
+          });
+        }
+      }
+
+      // Fetch Driving Route Path using OSRM Directions
+      function fetchAndDrawPath() {
+        const url = `https://router.project-osrm.org/route/v1/driving/${currentOrigin[0]},${currentOrigin[1]};${currentDest[0]},${currentDest[1]}?overview=full&geometries=geojson`;
+
+        $('#route-distance').text('Loading...');
+        $('#route-duration').text('Loading...');
+
+        $.ajax({
+          url: url,
+          type: 'GET',
+          dataType: 'json',
+          success: function(data) {
+            if (data.routes && data.routes.length > 0) {
+              const route = data.routes[0];
+              const coordinates = route.geometry.coordinates;
+
+              // Format Distance & Duration
+              const distanceKm = (route.distance / 1000).toFixed(1);
+              const durationMin = Math.round(route.duration / 60);
+              const durationHours = (durationMin / 60).toFixed(1);
+
+              $('#route-distance').text(`${distanceKm} km`);
+              if (durationMin > 90) {
+                $('#route-duration').text(`${durationHours} hrs`);
+              } else {
+                $('#route-duration').text(`${durationMin} min`);
+              }
+
+              // Update Source Data
+              if (map && map.getSource('route-source')) {
+                map.getSource('route-source').setData({
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: coordinates
+                  }
+                });
+              }
+            } else {
+              fallbackStraightLine();
+            }
+          },
+          error: function() {
+            // If OSRM is unreachable or network blocked, generate direct interpolated path
+            fallbackStraightLine();
+          }
+        });
+      }
+
+      // Fallback Geodesic/Arc Line Generator
+      function fallbackStraightLine() {
+        const coords = [currentOrigin, currentDest];
+        if (map && map.getSource('route-source')) {
+          map.getSource('route-source').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: coords
+            }
+          });
+        }
+        // Calculate haversine distance
+        const d = calculateDistance(currentOrigin[1], currentOrigin[0], currentDest[1], currentDest[0]);
+        $('#route-distance').text(`~${d.toFixed(1)} km`);
+        $('#route-duration').text(`~${Math.round(d * 1.2)} min`);
+      }
+
+      function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Earth's radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      }
+
+      // Fit Viewport around Point A and Point B
+      function fitMapToBounds() {
+        if (!map) return;
+        const bounds = new mapboxgl.LngLatBounds();
+        bounds.extend(currentOrigin);
+        bounds.extend(currentDest);
+        map.fitBounds(bounds, {
+          padding: { top: 120, bottom: 80, left: 400, right: 80 },
+          maxZoom: 14,
+          duration: 1000
+        });
+      }
+
+      // Update Input Text
+      function updateCoordsDisplay() {
+        $('#origin-coords').val(`${currentOrigin[0].toFixed(4)}, ${currentOrigin[1].toFixed(4)}`);
+        $('#dest-coords').val(`${currentDest[0].toFixed(4)}, ${currentDest[1].toFixed(4)}`);
+      }
+
+      // Event Listeners via jQuery
+      $('#btn-fit-bounds').on('click', function() {
+        fitMapToBounds();
+      });
+
+      $('#btn-recalculate').on('click', function() {
+        fetchAndDrawPath();
+      });
+
+      $('#btn-reverse-route').on('click', function() {
+        const temp = [...currentOrigin];
+        currentOrigin = [...currentDest];
+        currentDest = [...temp];
+
+        markerA.setLngLat(currentOrigin);
+        markerB.setLngLat(currentDest);
+
+        updateCoordsDisplay();
+        fetchAndDrawPath();
+        fitMapToBounds();
+      });
+
+      $('#preset-select').on('change', function() {
+        const key = $(this).val();
+        if (PRESETS[key]) {
+          currentOrigin = [...PRESETS[key].origin];
+          currentDest = [...PRESETS[key].dest];
+
+          markerA.setLngLat(currentOrigin);
+          markerB.setLngLat(currentDest);
+
+          updateCoordsDisplay();
+          fetchAndDrawPath();
+          fitMapToBounds();
+        }
+      });
+
+      // Style Switcher
+      $('.style-tab').on('click', function() {
+        $('.style-tab').removeClass('active');
+        $(this).addClass('active');
+        currentStyle = $(this).data('style');
+        map.setStyle(currentStyle);
+        map.once('style.load', function() {
+          setupPathLayers();
+          fetchAndDrawPath();
+        });
+      });
+
+      // Token Modal Handling
+      $('#btn-edit-token').on('click', function() {
+        $('#input-mapbox-token').val(localStorage.getItem('mapbox_custom_token') || '');
+        $('#token-modal').css('display', 'flex');
+      });
+
+      $('#btn-cancel-token').on('click', function() {
+        $('#token-modal').hide();
+      });
+
+      $('#btn-save-token').on('click', function() {
+        const tokenVal = $('#input-mapbox-token').val().trim();
+        if (tokenVal) {
+          localStorage.setItem('mapbox_custom_token', tokenVal);
+          location.reload();
+        }
+      });
+
+      // Start the application
+      updateCoordsDisplay();
+      initMap();
+    });
+  </script>
+</body>
+</html>

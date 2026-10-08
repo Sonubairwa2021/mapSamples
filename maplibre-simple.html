@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple MapLibre Path Integration (Point A to Point B)</title>
+
+  <!-- 1. MapLibre GL JS Library & Stylesheet (100% Free & Open-Source) -->
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    /* Map Container */
+    #map {
+      width: 100%;
+      height: 500px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+    .info-box {
+      margin-top: 15px;
+      padding: 12px 16px;
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      font-size: 14px;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>MapLibre: Simple Point A to Point B Route</h2>
+    <div id="map"></div>
+    <div class="info-box" id="route-info">
+      <strong>Route Status:</strong> <span id="status-text">Loading route...</span>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // STEP 1: Define Point A and Point B [Longitude, Latitude]
+    // ==========================================
+    const pointA = [-122.4194, 37.7749]; // San Francisco [lng, lat]
+    const pointB = [-121.8863, 37.3382]; // San Jose [lng, lat]
+
+    // ==========================================
+    // STEP 2: Initialize Map (No Token / Key Required!)
+    // ==========================================
+    const map = new maplibregl.Map({
+      container: 'map',
+      // Free vector styles from Carto or Demotiles
+      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', // or dark-matter-gl-style
+      center: [(pointA[0] + pointB[0]) / 2, (pointA[1] + pointB[1]) / 2],
+      zoom: 9
+    });
+
+    // Add Zoom & Rotation controls
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    // ==========================================
+    // STEP 3: Add Markers for Point A and Point B
+    // ==========================================
+    // Point A (Green)
+    new maplibregl.Marker({ color: '#10b981' })
+      .setLngLat(pointA)
+      .setPopup(new maplibregl.Popup().setHTML('<strong>Point A (Start)</strong>'))
+      .addTo(map);
+
+    // Point B (Red)
+    new maplibregl.Marker({ color: '#ef4444' })
+      .setLngLat(pointB)
+      .setPopup(new maplibregl.Popup().setHTML('<strong>Point B (Destination)</strong>'))
+      .addTo(map);
+
+    // ==========================================
+    // STEP 4: Draw Route Path
+    // ==========================================
+    map.on('load', function() {
+      // Fetch road driving path from free OSRM API (or use direct line)
+      const routeUrl = `https://router.project-osrm.org/route/v1/driving/${pointA[0]},${pointA[1]};${pointB[0]},${pointB[1]}?overview=full&geometries=geojson`;
+
+      fetch(routeUrl)
+        .then(response => response.json())
+        .then(data => {
+          let coordinates = [pointA, pointB]; // fallback straight line
+
+          if (data.routes && data.routes.length > 0) {
+            coordinates = data.routes[0].geometry.coordinates; // real road coordinates
+            const distanceKm = (data.routes[0].distance / 1000).toFixed(1);
+            const durationMin = Math.round(data.routes[0].duration / 60);
+            document.getElementById('status-text').innerText = `Distance: ${distanceKm} km | Duration: ${durationMin} min`;
+          }
+
+          // Add GeoJSON Source for the path
+          map.addSource('route-path', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: coordinates
+              }
+            }
+          });
+
+          // Add Line Layer to display the path on the map
+          map.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route-path',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#0d9488', // Path color (Teal)
+              'line-width': 5,         // Path line thickness
+              'line-opacity': 0.85
+            }
+          });
+
+          // Fit map view to show both points and the route
+          const bounds = new maplibregl.LngLatBounds();
+          coordinates.forEach(coord => bounds.extend(coord));
+          map.fitBounds(bounds, { padding: 50 });
+        })
+        .catch(err => {
+          console.error('Error fetching route:', err);
+          // Fallback direct line between Point A and B
+          map.addSource('route-path', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              geometry: { type: 'LineString', coordinates: [pointA, pointB] }
+            }
+          });
+          map.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route-path',
+            paint: { 'line-color': '#0d9488', 'line-width': 4 }
+          });
+          document.getElementById('status-text').innerText = 'Connected via direct line';
+        });
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Open-Source Path and Route Visualizer between two points using MapLibre GL JS, jQuery, free vector basemaps, and OSRM routing.">
+  <title>MapLibre GL JS - Free Open-Source Route Navigator (Point A to Point B)</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- MapLibre GL JS CSS & JS (100% Free & Open-Source) -->
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0a0f1d;
+      --card-bg: rgba(15, 23, 42, 0.85);
+      --card-border: rgba(255, 255, 255, 0.12);
+      --card-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+      --accent-emerald: #10b981;
+      --accent-teal: #14b8a6;
+      --accent-indigo: #6366f1;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Map Canvas */
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Top Floating Navigation */
+    .top-nav {
+      position: absolute;
+      top: 18px;
+      left: 20px;
+      right: 20px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .brand-pill {
+      pointer-events: auto;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 9999px;
+      padding: 10px 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--card-shadow);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .brand-pill:hover {
+      border-color: rgba(20, 184, 166, 0.5);
+      box-shadow: 0 10px 30px -5px rgba(20, 184, 166, 0.3);
+    }
+
+    .badge-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #10b981, #06b6d4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 15px;
+      color: white;
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);
+    }
+
+    .brand-text h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .nav-actions {
+      pointer-events: auto;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .nav-btn {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 9px 18px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--card-shadow);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(30, 41, 59, 0.95);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .nav-btn.primary {
+      background: linear-gradient(135deg, #059669, #0284c7);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      box-shadow: 0 8px 24px -4px rgba(16, 185, 129, 0.5);
+    }
+
+    .nav-btn.primary:hover {
+      background: linear-gradient(135deg, #047857, #0369a1);
+      transform: translateY(-1px);
+    }
+
+    /* Floating Control Sidebar */
+    .control-sidebar {
+      position: absolute;
+      top: 86px;
+      left: 20px;
+      width: 370px;
+      max-height: calc(100vh - 110px);
+      z-index: 10;
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: var(--card-shadow);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.15) transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .control-sidebar::-webkit-scrollbar {
+      width: 5px;
+    }
+    .control-sidebar::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.15);
+      border-radius: 4px;
+    }
+
+    /* Open Source Badge */
+    .oss-badge {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #6ee7b7;
+    }
+
+    .oss-badge svg {
+      flex-shrink: 0;
+    }
+
+    /* Route Statistics Card */
+    .stats-card {
+      background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-box {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      font-family: var(--font-mono);
+    }
+
+    .stat-value.highlight {
+      background: linear-gradient(135deg, #2dd4bf, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Points Selection Area */
+    .points-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+
+    .point-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .point-card:focus-within {
+      border-color: var(--accent-teal);
+      box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+    }
+
+    .point-indicator {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .point-a-badge {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+
+    .point-b-badge {
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      color: white;
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+    }
+
+    .point-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .point-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .point-coords {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #fff;
+      background: transparent;
+      border: none;
+      outline: none;
+      width: 100%;
+    }
+
+    /* Buttons Row */
+    .controls-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      border: none;
+      outline: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.13);
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0d9488, #0284c7);
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(13, 148, 136, 0.4);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .btn-full {
+      width: 100%;
+    }
+
+    /* Form Fields */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .custom-select {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      color: #fff;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: var(--font-sans);
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .custom-select:focus {
+      border-color: var(--accent-teal);
+    }
+
+    /* Style Switcher */
+    .style-switcher {
+      display: flex;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .style-tab {
+      flex: 1;
+      padding: 7px 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-radius: 7px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      transition: all 0.2s ease;
+    }
+
+    .style-tab.active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    /* Custom Pulsing Markers */
+    .custom-map-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      cursor: grab;
+      position: relative;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .custom-map-marker:active {
+      cursor: grabbing;
+      transform: scale(1.15);
+    }
+
+    .marker-inner {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 13px;
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 2;
+    }
+
+    .marker-origin .marker-inner {
+      background: #10b981;
+    }
+
+    .marker-destination .marker-inner {
+      background: #f43f5e;
+    }
+
+    .marker-pulse {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      z-index: 1;
+    }
+
+    .marker-origin .marker-pulse {
+      background: rgba(16, 185, 129, 0.4);
+    }
+
+    .marker-destination .marker-pulse {
+      background: rgba(244, 63, 94, 0.4);
+    }
+
+    @keyframes pulse-ring {
+      0% {
+        transform: scale(0.6);
+        opacity: 0.9;
+      }
+      80%, 100% {
+        transform: scale(1.6);
+        opacity: 0;
+      }
+    }
+
+    /* Bottom Instruction Tooltip */
+    .instruction-tooltip {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: var(--card-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--card-border);
+      border-radius: 9999px;
+      padding: 9px 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--card-shadow);
+      pointer-events: none;
+    }
+
+    .instruction-tooltip strong {
+      color: #2dd4bf;
+    }
+
+    @media (max-width: 768px) {
+      .control-sidebar {
+        width: calc(100% - 32px);
+        left: 16px;
+        right: 16px;
+        top: auto;
+        bottom: 16px;
+        max-height: 48vh;
+      }
+      .instruction-tooltip {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="top-nav">
+    <div class="brand-pill">
+      <div class="badge-icon">L</div>
+      <div class="brand-text">
+        <h1 id="page-title">MapLibre GL JS &bull; Path Navigator</h1>
+        <p>100% Free Open-Source &bull; No API Key Required</p>
+      </div>
+    </div>
+
+    <div class="nav-actions">
+      <a href="index.html" class="nav-btn" id="btn-home">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        Overview
+      </a>
+      <a href="mapbox.html" class="nav-btn primary" id="btn-goto-mapbox">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+        Open Mapbox GL
+      </a>
+    </div>
+  </header>
+
+  <!-- Sidebar Controls -->
+  <aside class="control-sidebar">
+    <!-- Open Source Free Badge -->
+    <div class="oss-badge">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+      <span>Free & Open Source: No access token or account needed!</span>
+    </div>
+
+    <!-- Live Route Distance & Duration Stats -->
+    <div class="stats-card">
+      <div class="stat-box">
+        <span class="stat-label">Total Distance</span>
+        <span class="stat-value highlight" id="route-distance">-- km</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">Est. Travel Time</span>
+        <span class="stat-value" id="route-duration">-- min</span>
+      </div>
+    </div>
+
+    <!-- Preset Routes -->
+    <div class="form-group">
+      <label class="form-label" for="preset-select">Preset Journey</label>
+      <select id="preset-select" class="custom-select">
+        <option value="london_cambridge">London to Cambridge (UK)</option>
+        <option value="paris_amsterdam">Paris to Amsterdam (Europe)</option>
+        <option value="sf_sanjose" selected>San Francisco to San Jose (USA)</option>
+        <option value="nyc_boston">New York to Boston (USA)</option>
+        <option value="tokyo_yokohama">Tokyo to Yokohama (Japan)</option>
+        <option value="berlin_hamburg">Berlin to Hamburg (Germany)</option>
+      </select>
+    </div>
+
+    <!-- Origin & Destination Inputs -->
+    <div class="points-section">
+      <div class="point-card">
+        <div class="point-indicator point-a-badge">A</div>
+        <div class="point-info">
+          <div class="point-title">Origin (Point A)</div>
+          <input type="text" id="origin-coords" class="point-coords" readonly value="-122.4194, 37.7749">
+        </div>
+      </div>
+
+      <div class="point-card">
+        <div class="point-indicator point-b-badge">B</div>
+        <div class="point-info">
+          <div class="point-title">Destination (Point B)</div>
+          <input type="text" id="dest-coords" class="point-coords" readonly value="-121.8863, 37.3382">
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Actions -->
+    <div class="controls-row">
+      <button class="btn btn-secondary" id="btn-reverse-route" title="Swap Origin & Destination">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/></svg>
+        Swap Points
+      </button>
+      <button class="btn btn-secondary" id="btn-fit-bounds" title="Fit view to current path">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        Fit Path View
+      </button>
+    </div>
+
+    <!-- Map Style Switcher (Carto & Demotiles) -->
+    <div class="form-group">
+      <label class="form-label">Free Vector Style</label>
+      <div class="style-switcher">
+        <button class="style-tab active" data-style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json">Dark</button>
+        <button class="style-tab" data-style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json">Light</button>
+        <button class="style-tab" data-style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json">Voyager</button>
+        <button class="style-tab" data-style="https://demotiles.maplibre.org/style.json">OSM Demo</button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" id="btn-recalculate">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+      Refresh Path
+    </button>
+  </aside>
+
+  <!-- Instructional floating hint -->
+  <div class="instruction-tooltip">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+    <span>Tip: <strong>Drag markers A and B</strong> on the map to recalculate the route dynamically!</span>
+  </div>
+
+  <!-- Map Container -->
+  <main id="map" aria-label="MapLibre Interactive Path Map"></main>
+
+  <!-- Application Logic using jQuery and MapLibre GL JS -->
+  <script>
+    $(document).ready(function() {
+      // Defined Presets [Lng, Lat]
+      const PRESETS = {
+        sf_sanjose: {
+          name: "San Francisco to San Jose",
+          origin: [-122.4194, 37.7749],
+          dest: [-121.8863, 37.3382]
+        },
+        london_cambridge: {
+          name: "London to Cambridge",
+          origin: [-0.1278, 51.5074],
+          dest: [0.1218, 52.2053]
+        },
+        nyc_boston: {
+          name: "New York to Boston",
+          origin: [-74.0060, 40.7128],
+          dest: [-71.0589, 42.3601]
+        },
+        paris_amsterdam: {
+          name: "Paris to Amsterdam",
+          origin: [2.3522, 48.8566],
+          dest: [4.9041, 52.3676]
+        },
+        tokyo_yokohama: {
+          name: "Tokyo to Yokohama",
+          origin: [139.6917, 35.6895],
+          dest: [139.6380, 35.4437]
+        },
+        berlin_hamburg: {
+          name: "Berlin to Hamburg",
+          origin: [13.4050, 52.5200],
+          dest: [9.9937, 53.5511]
+        }
+      };
+
+      let currentOrigin = [...PRESETS.sf_sanjose.origin];
+      let currentDest = [...PRESETS.sf_sanjose.dest];
+      let currentStyle = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+      let map, markerA, markerB;
+
+      // Create Custom DOM Element for MapLibre Marker
+      function createMarkerElement(label, type) {
+        const el = document.createElement('div');
+        el.className = `custom-map-marker marker-${type}`;
+        el.innerHTML = `
+          <div class="marker-pulse"></div>
+          <div class="marker-inner">${label}</div>
+        `;
+        return el;
+      }
+
+      // Initialize the MapLibre Map
+      function initMap() {
+        map = new maplibregl.Map({
+          container: 'map',
+          style: currentStyle,
+          center: [
+            (currentOrigin[0] + currentDest[0]) / 2,
+            (currentOrigin[1] + currentDest[1]) / 2
+          ],
+          zoom: 9,
+          pitch: 35,
+          attributionControl: false
+        });
+
+        // Add standard navigation controls
+        map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+        map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+
+        // Draggable Marker A (Origin)
+        const elA = createMarkerElement('A', 'origin');
+        markerA = new maplibregl.Marker({ element: elA, draggable: true })
+          .setLngLat(currentOrigin)
+          .addTo(map);
+
+        // Draggable Marker B (Destination)
+        const elB = createMarkerElement('B', 'destination');
+        markerB = new maplibregl.Marker({ element: elB, draggable: true })
+          .setLngLat(currentDest)
+          .addTo(map);
+
+        // Marker Drag End Events
+        markerA.on('dragend', function() {
+          const lngLat = markerA.getLngLat();
+          currentOrigin = [lngLat.lng, lngLat.lat];
+          updateCoordsDisplay();
+          fetchAndDrawPath();
+        });
+
+        markerB.on('dragend', function() {
+          const lngLat = markerB.getLngLat();
+          currentDest = [lngLat.lng, lngLat.lat];
+          updateCoordsDisplay();
+          fetchAndDrawPath();
+        });
+
+        // Click map to set point
+        map.on('click', function(e) {
+          const clickCoord = [e.lngLat.lng, e.lngLat.lat];
+          const distToA = Math.hypot(clickCoord[0] - currentOrigin[0], clickCoord[1] - currentOrigin[1]);
+          const distToB = Math.hypot(clickCoord[0] - currentDest[0], clickCoord[1] - currentDest[1]);
+
+          if (distToA < distToB) {
+            currentOrigin = clickCoord;
+            markerA.setLngLat(currentOrigin);
+          } else {
+            currentDest = clickCoord;
+            markerB.setLngLat(currentDest);
+          }
+          updateCoordsDisplay();
+          fetchAndDrawPath();
+        });
+
+        map.on('load', function() {
+          setupPathLayers();
+          fetchAndDrawPath();
+          fitMapToBounds();
+        });
+      }
+
+      // Add GeoJSON Layer & Sources for Glowing Route Path
+      function setupPathLayers() {
+        if (!map.getSource('route-source')) {
+          map.addSource('route-source', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: []
+              }
+            }
+          });
+
+          // Outer Emerald Glow
+          map.addLayer({
+            id: 'route-glow',
+            type: 'line',
+            source: 'route-source',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#10b981',
+              'line-width': 10,
+              'line-opacity': 0.35,
+              'line-blur': 4
+            }
+          });
+
+          // Main Crisp Path Line
+          map.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route-source',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#14b8a6',
+              'line-width': 4.5,
+              'line-opacity': 0.95
+            }
+          });
+
+          // Dashed Path Accent
+          map.addLayer({
+            id: 'route-dash',
+            type: 'line',
+            source: 'route-source',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#ffffff',
+              'line-width': 2,
+              'line-dasharray': [1, 2],
+              'line-opacity': 0.8
+            }
+          });
+        }
+      }
+
+      // Fetch Driving Route Path using OSRM Directions API
+      function fetchAndDrawPath() {
+        const url = `https://router.project-osrm.org/route/v1/driving/${currentOrigin[0]},${currentOrigin[1]};${currentDest[0]},${currentDest[1]}?overview=full&geometries=geojson`;
+
+        $('#route-distance').text('Loading...');
+        $('#route-duration').text('Loading...');
+
+        $.ajax({
+          url: url,
+          type: 'GET',
+          dataType: 'json',
+          success: function(data) {
+            if (data.routes && data.routes.length > 0) {
+              const route = data.routes[0];
+              const coordinates = route.geometry.coordinates;
+
+              // Format Distance & Duration
+              const distanceKm = (route.distance / 1000).toFixed(1);
+              const durationMin = Math.round(route.duration / 60);
+              const durationHours = (durationMin / 60).toFixed(1);
+
+              $('#route-distance').text(`${distanceKm} km`);
+              if (durationMin > 90) {
+                $('#route-duration').text(`${durationHours} hrs`);
+              } else {
+                $('#route-duration').text(`${durationMin} min`);
+              }
+
+              // Update MapLibre Source Data
+              if (map && map.getSource('route-source')) {
+                map.getSource('route-source').setData({
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: coordinates
+                  }
+                });
+              }
+            } else {
+              fallbackStraightLine();
+            }
+          },
+          error: function() {
+            // Direct GeoJSON fallback line if offline or external API delay
+            fallbackStraightLine();
+          }
+        });
+      }
+
+      // Fallback Direct Path Line Generator
+      function fallbackStraightLine() {
+        const coords = [currentOrigin, currentDest];
+        if (map && map.getSource('route-source')) {
+          map.getSource('route-source').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: coords
+            }
+          });
+        }
+        // Calculate haversine distance
+        const d = calculateDistance(currentOrigin[1], currentOrigin[0], currentDest[1], currentDest[0]);
+        $('#route-distance').text(`~${d.toFixed(1)} km`);
+        $('#route-duration').text(`~${Math.round(d * 1.2)} min`);
+      }
+
+      function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      }
+
+      // Fit Viewport around Point A and Point B
+      function fitMapToBounds() {
+        if (!map) return;
+        const bounds = new maplibregl.LngLatBounds();
+        bounds.extend(currentOrigin);
+        bounds.extend(currentDest);
+        map.fitBounds(bounds, {
+          padding: { top: 120, bottom: 80, left: 400, right: 80 },
+          maxZoom: 14,
+          duration: 1000
+        });
+      }
+
+      // Update Input Text
+      function updateCoordsDisplay() {
+        $('#origin-coords').val(`${currentOrigin[0].toFixed(4)}, ${currentOrigin[1].toFixed(4)}`);
+        $('#dest-coords').val(`${currentDest[0].toFixed(4)}, ${currentDest[1].toFixed(4)}`);
+      }
+
+      // Event Listeners via jQuery
+      $('#btn-fit-bounds').on('click', function() {
+        fitMapToBounds();
+      });
+
+      $('#btn-recalculate').on('click', function() {
+        fetchAndDrawPath();
+      });
+
+      $('#btn-reverse-route').on('click', function() {
+        const temp = [...currentOrigin];
+        currentOrigin = [...currentDest];
+        currentDest = [...temp];
+
+        markerA.setLngLat(currentOrigin);
+        markerB.setLngLat(currentDest);
+
+        updateCoordsDisplay();
+        fetchAndDrawPath();
+        fitMapToBounds();
+      });
+
+      $('#preset-select').on('change', function() {
+        const key = $(this).val();
+        if (PRESETS[key]) {
+          currentOrigin = [...PRESETS[key].origin];
+          currentDest = [...PRESETS[key].dest];
+
+          markerA.setLngLat(currentOrigin);
+          markerB.setLngLat(currentDest);
+
+          updateCoordsDisplay();
+          fetchAndDrawPath();
+          fitMapToBounds();
+        }
+      });
+
+      // Style Switcher
+      $('.style-tab').on('click', function() {
+        $('.style-tab').removeClass('active');
+        $(this).addClass('active');
+        currentStyle = $(this).data('style');
+        map.setStyle(currentStyle);
+        map.once('style.load', function() {
+          setupPathLayers();
+          fetchAndDrawPath();
+        });
+      });
+
+      // Start the application
+      updateCoordsDisplay();
+      initMap();
+    });
+  </script>
+</body>
+</html>
